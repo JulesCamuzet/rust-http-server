@@ -32,9 +32,6 @@ fn handle_client(mut stream: TcpStream) -> Result<bool, Error> {
     }
   }
 
-  println!("{}", request);
-
-
   let response = "HTTP/1.1 200 OK\r\n\
     Server: WebServer\r\n\
     Content-Type: text/html\r\n\
