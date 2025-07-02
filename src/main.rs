@@ -1,32 +1,43 @@
-use std::{io::{BufReader, Error, Read, Write}, net::{TcpListener, TcpStream}};
+use std::{io::{BufReader, Read, Write}, net::{TcpListener, TcpStream}};
 
-fn handle_client(mut stream: TcpStream) -> Result<bool, Error> {
+enum HandleClientError {
+  Io(std::io::Error),
+  Utf8(core::str::Utf8Error)
+}
+
+impl From<std::io::Error> for HandleClientError {
+  fn from(err: std::io::Error) -> Self {
+    return HandleClientError::Io(err);
+  }
+}
+
+impl From<core::str::Utf8Error> for HandleClientError {
+  fn from(err: core::str::Utf8Error) -> Self {
+    return HandleClientError::Utf8(err);
+  }
+}
+
+impl std::fmt::Display for HandleClientError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      HandleClientError::Io(e) => write!(f, "{}", e),
+      HandleClientError::Utf8(e) => write!(f, "{}", e)
+    }      
+  }
+}
+
+fn handle_client(mut stream: TcpStream) -> Result<(), HandleClientError> {
   let mut request = String::new();
   
   let mut reader = BufReader::new(&stream);
   let mut buffer = [0; 255];
 
   loop {
-    let n = match reader.read(&mut buffer) {
-      Ok(n) => n,
-
-      Err(e) => {
-        eprint!("Error while reading stream : {e}");
-        return Err(e)
-      }
-    };
-
-    let s = match str::from_utf8_mut(&mut buffer) {
-      Ok(s) => s,
-      
-      Err(_) => {
-        eprintln!("Error while converting buffer to string");
-        ""
-      }
-    };
+    let n = reader.read(&mut buffer)?;
+    let s = str::from_utf8_mut(&mut buffer)?; 
 
     request.push_str(s);
-    println!("{}", n);
+
     if n < 255 {
       break;
     }
@@ -41,23 +52,10 @@ fn handle_client(mut stream: TcpStream) -> Result<bool, Error> {
     Hello world.".as_bytes();
 
 
-  match stream.write(response) {
-    Ok(_) => {},
+  stream.write(response)?;
+  stream.shutdown(std::net::Shutdown::Both)?;
 
-    Err(e) => {
-      eprintln!("Failed to write in stream : {e}");
-      return Err(e)
-    }
-  }
-
-  match stream.shutdown(std::net::Shutdown::Both) {
-    Ok(_) => return Ok(true),
-
-    Err(e ) => {
-      eprintln!("Failed to shutdown stream : {e}");
-      return Err(e);
-    }
-  }
+  Ok(())
 }
 
 fn main() {
@@ -78,7 +76,7 @@ fn main() {
       Ok(stream) => {
         match handle_client(stream) {
           Ok(_) => {},
-          Err(_) => {}
+          Err(e) => eprintln!("Error while handling client : {e}")
         };
       },
 
